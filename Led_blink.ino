@@ -4,14 +4,15 @@
 
 int main (void)
 {
-  DDRB=0b00000011;
-int arr[7]= {0x01,0x02,0x04,0x08,0x40,0x20,0x10};
+  DDRB=0b00000001;
+  //DDRB=0x01; //in hex
   while(1)
-  {
-    for (int i=0;i<8;i++)
     {
-     PORTB= arr[i];
+     PORTB= 0b00000001;
+    //PORTB= 0x01; // in hex
     _delay_ms(500);
-    }
-  }
+    PORTB= 0b00000000;
+    //PORTB= 0x00; // in hex
+    _delay_ms(500);
+    }  
 }
