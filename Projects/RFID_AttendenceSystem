@@ -1,0 +1,194 @@
+#include <SPI.h> // for the RFID and SD card module
+#include <SD.h> // for the SD card
+#include <RTClib.h> // for the RTC
+int count = 0;                                          // count = 0
+char input[13];                                         // character array of size 12    
+String  in ="";
+String person1 ="800894420F5";
+String person2 ="20054B811FF";
+String person3 ="20054BA35D9";
+String person4 ="800895C874A";
+// define pins for RFID
+#define CS_RFID 10
+#define RST_RFID 9
+// define select pin for SD card module
+#define CS_SD 4 
+
+// Create a file to store the data
+File myFile;
+
+
+// Instance of the class for RTC
+RTC_DS1307 rtc;
+
+// Define check in time
+const int checkInHour = 9;
+const int checkInMinute = 5;
+
+//Variable to hold user check in
+int userCheckInHour;
+int userCheckInMinute;
+
+// Pins for LEDs and buzzer
+const int redLED = 6;
+const int greenLED = 7;
+const int buzzer = 5;
+
+void setup() {
+  
+  // Set LEDs and buzzer as outputs
+  pinMode(redLED, OUTPUT);  
+  pinMode(greenLED, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+  
+  // Init Serial port
+  Serial.begin(9600);
+  while(!Serial); // for Leonardo/Micro/Zero
+  
+  // Init SPI bus
+  SPI.begin(); 
+
+
+  // Setup for the SD card
+  Serial.print("Initializing SD card...");
+  if(!SD.begin(CS_SD)) {
+    Serial.println("initialization failed!");
+    return;
+  }
+  Serial.println("initialization done.");
+
+  // Setup for the RTC  
+  if(!rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+    while(1);
+  }
+  else {
+    // following line sets the RTC to the date & time this sketch was compiled
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  if(!rtc.isrunning()) {
+    Serial.println("RTC is NOT running!");
+  }
+}
+
+void loop() {
+  //look for new cards
+  if(Serial.available())
+   {
+    readRFID();
+   }
+    logCard();
+    verifyCheckIn();
+  
+  delay(10);
+}
+
+void readRFID() {
+
+      in ="";
+      count = 0;
+      while(Serial.available() && count < 13)          // Read 12 characters and store them in input array
+      {
+         input[count] = Serial.read();
+         count++;
+         in += String (input[count]);
+         delay(10);
+      }
+//      Serial.print(input);
+//         Serial.print(in);
+      if((input[0] ^ input[2] ^ input[4] ^ input[6] ^ input[8] == input[10]) && 
+         (input[1] ^ input[3] ^ input[5] ^ input[7] ^ input[9] == input[11]))
+         {
+          if(in==person1)
+         {
+          Serial.println("Vaibhav");
+         }
+         else if (in==person2)
+         {
+          Serial.println("Ravindra");
+         }
+         else if (in ==person3)
+         {
+          Serial.println("Nayan");
+         }
+         else if (in ==person4)
+         {
+          Serial.println("Gaurav");
+         }
+   }
+      else
+      {
+            Serial.println("Error"); 
+      }     
+   
+  // Sound the buzzer when a card is read
+  tone(buzzer, 2000); 
+  delay(100);        
+  noTone(buzzer);
+  
+  delay(100);
+}
+
+void logCard() {
+  // Enables SD card chip select pin
+  digitalWrite(CS_SD,LOW);
+  
+  // Open file
+  myFile=SD.open("DATA.txt", FILE_WRITE);
+
+  // If the file opened ok, write to it
+  if (myFile) {
+    Serial.println("File opened ok");
+    myFile.print(input);
+    myFile.print(", ");   
+    
+    // Save time on SD card
+    DateTime now = rtc.now();
+    myFile.print(now.year(), DEC);
+    myFile.print('/');
+    myFile.print(now.month(), DEC);
+    myFile.print('/');
+    myFile.print(now.day(), DEC);
+    myFile.print(',');
+    myFile.print(now.hour(), DEC);
+    myFile.print(':');
+    myFile.println(now.minute(), DEC);
+    
+    // Print time on Serial monitor
+    Serial.print(now.year(), DEC);
+    Serial.print('/');
+    Serial.print(now.month(), DEC);
+    Serial.print('/');
+    Serial.print(now.day(), DEC);
+    Serial.print(' ');
+    Serial.print(now.hour(), DEC);
+    Serial.print(':');
+    Serial.println(now.minute(), DEC);
+    Serial.println("sucessfully written on SD card");
+    myFile.close();
+
+    // Save check in time;
+    userCheckInHour = now.hour();
+    userCheckInMinute = now.minute();
+  }
+  else {
+    Serial.println("error opening data.txt");  
+  }
+  // Disables SD card chip select pin  
+  digitalWrite(CS_SD,HIGH);
+}
+
+void verifyCheckIn(){
+  if((userCheckInHour < checkInHour)||((userCheckInHour==checkInHour) && (userCheckInMinute <= checkInMinute))){
+    digitalWrite(greenLED, HIGH);
+    delay(2000);
+    digitalWrite(greenLED,LOW);
+    Serial.println("You're welcome!");
+  }
+  else{
+    digitalWrite(redLED, HIGH);
+    delay(2000);
+    digitalWrite(redLED,LOW);
+    Serial.println("You are late...");
+  }
+}
