@@ -1,0 +1,601 @@
+#include <ESP8266WiFi.h>    
+#include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
+#include <EEPROM.h>
+WiFiClient client;
+
+/////////Variables////////
+int go=0;           //to check Server multiple times
+int come=0;         //to check internet multiple times
+//int i = 0;    
+int statusCode;     //web server response (200, error 404) 
+String st;          //to print available networks on webservers
+String content;     //web page content
+int blueLed = D4;   //declaring blue led
+int redLed = D8;    //declaring red led
+int greenLed = D3;  //declaring green led
+int sensorPin = D1; //declaring Sensor input pin
+const int buzzer = D7; //declaring buzzer pin
+bool result = false;// result for WiFi connection
+int button = D2;    //button for setup mode
+int sensorvalue =0; //reading sensor value
+int ledState =LOW;  //led blink with millis()
+String data;        //converting sensor data (1-0) to string (motion detected)
+unsigned long previousTime = 0; //function for millis() blink
+String API;         //user ID  variable
+
+//////////WiFi/////////
+const char* ssid = "text";  //variable wifi ssid checking in websever
+const char* passphrase = "text";  //variable wifi pass checking in websever
+
+//////////post data///////
+const char* host1 = "innovativeupshot.in"; //edit the host adress, ip address etc. 
+String url1 = "http://innovativeupshot.in/harshit/hardwareToServerGET.php?deviceid=Z5A3WBIHLlijbfgxkTDc&status="; //URL for Server to post data
+String url2 = "&idgen=Submit"; //GET Method
+
+/////////internet//////////
+const char* host = "httpbin.org"; //simple HTTP Request & Response link for testing internet
+bool hasInternet = true;   //condition for internet available or not
+const bool debug = false;  //testing internet
+
+/////////Function Decalration/////////
+void done();  //to check internet
+bool testWifi(void);  //WiFi connected or not
+void launchWeb(void); // Creating WebServer 
+void setupAP(void);   //Scanning networks
+void sensor(void);    //reading sensor values
+void postData(void);  //posting data on server
+
+//Establishing Local server at port 80 whenever required
+ESP8266WebServer server(80);
+
+void setup()
+{
+  Serial.begin(115200); //Initialising if(DEBUG)Serial Monitor
+  Serial.println();
+  Serial.println("Disconnecting previously connected WiFi");
+  WiFi.disconnect();
+  EEPROM.begin(512); //Initialasing EEPROM
+  delay(10);
+  pinMode(blueLed, OUTPUT);
+  pinMode(redLed,OUTPUT);
+  pinMode(greenLed,OUTPUT);
+  //pinMode(ledPin, OUTPUT);
+  pinMode(sensorPin, INPUT);
+  pinMode(button, INPUT);
+  pinMode(buzzer,OUTPUT);
+  Serial.println();
+  Serial.println();
+  Serial.println("Startup");
+
+
+  /////////////////////////////////////////////*****Reading Values from EEPROM*****////////////////////////////////////////////
+  Serial.println("Reading EEPROM ssid");
+  String eAPI;   //variable for reading API saved in EEPROM
+  for(int i =0; i<20; ++i) //reading EEPROM location from 0 to 5
+  {
+    eAPI += char(EEPROM.read(i));  //reading API inserted
+  }
+  Serial.println();
+  Serial.print("API: ");
+  Serial.println(eAPI);
+ 
+  String esid;  //variable for reading ssid saved in EEPROM
+  for (int i = 21; i < 52; ++i)  //reading EEPROM location from 6 to 31
+  {
+    esid += char(EEPROM.read(i)); //reading ssid inserted
+  }
+  Serial.println();
+  Serial.print("SSID: ");
+  Serial.println(esid);
+  Serial.println("Reading EEPROM pass");
+
+  String epass;  //variable for reading ssid saved in EEPROM
+  for (int i = 52; i < 78; ++i)  //reading EEPROM location from 6 to 31
+  {
+    epass += char(EEPROM.read(i)); //reading pass inserted
+  }
+  Serial.println();
+  Serial.print("PASS: ");
+  Serial.println(epass);
+  Serial.println("Reading EEPROM API");
+  
+ 
+  hasInternet=false;
+  ///////////////////////////////////////////*****Connecting selected WiFi******/////////////////////////////////////////////// 
+  WiFi.begin(esid.c_str(), epass.c_str()); //checking password inserted in EEPROM is correct or not
+  if (testWifi())
+  {
+   /////green light blink////////
+   success();  //if WIFI is connected
+    Serial.println("Succesfully Connected!!!");
+    result = true;
+      for (int i = 0; i < 2; i++) //blink green two times if connected
+    {
+      digitalWrite(greenLed, HIGH);
+      delay(200);
+      digitalWrite(greenLed, LOW);
+      delay(200);
+    }
+    return;
+    hasInternet=true;
+  }
+
+  Serial.println();
+  Serial.println("Waiting.");
+   
+  while ((WiFi.status() != WL_CONNECTED)|| (digitalRead(sensorPin)==HIGH)) //waiting till wifi is not connected
+  {
+    sensor();
+    Serial.print(".,");
+    delay(1000);
+    server.handleClient();
+    delay(1000);
+   
+    while(digitalRead (button) == HIGH)
+  {
+    digitalWrite(redLed,LOW);
+    delay(50);
+    analogWrite(redLed,230);
+    analogWrite(blueLed,126);
+    analogWrite(greenLed,34); //Orange LED ON
+    delay(500);
+    launchWeb();
+    setupAP();
+  }
+}
+  analogWrite(D8,0);
+  analogWrite(D4,0);
+  analogWrite(D3,0);  //Orange LED OFF
+}
+
+void loop() {
+  //////////////////////////////////////////////*****Generating HOTSPOT*****////////////////////////////////////////////////
+  if(digitalRead (button) == HIGH)
+  {
+    for (int i = 0; i < 10; i++)
+    {
+      digitalWrite(redLed,LOW);
+      analogWrite(D8,230);
+      analogWrite(D4,126);
+      analogWrite(D3,34); // orange led for going into setup mode
+      delay(150);
+      analogWrite(D8,0);
+      analogWrite(D4,0);
+      analogWrite(D3,0);
+      delay(150);
+    }
+    Serial.println("Turning the HotSpot On");
+    launchWeb();  // Setup HotSpot and creating Web Server
+    setupAP();    // Sacannig networks
+    Serial.println();
+  Serial.println("Waiting.");
+   
+  while ((WiFi.status() != WL_CONNECTED))  //waiting for WiFi to connect
+  {
+    analogWrite(D8,230);
+    analogWrite(D4,126);
+    analogWrite(D3,34); //orange LED ON
+    
+    Serial.print(".:");
+    delay(1000);
+    server.handleClient(); //for http Server
+    delay(1000);   
+}
+  }
+  ////////////////////////////////////////////////*****MAIN LOOP*****/////////////////////////////////////////////////////////
+   if ((WiFi.status() == WL_CONNECTED)) //when wifi is connected
+  {
+  analogWrite(redLed,0);
+  analogWrite(blueLed,0);
+  analogWrite(greenLed,0);
+  sensor(); //checking sensor state
+  if(sensorvalue==1)
+  {
+  postData();   //POST data if there is detection
+  }
+  }
+  else if ((WiFi.status() != WL_CONNECTED)) //waiting till wifi is not connected
+  {
+    while((WiFi.status() != WL_CONNECTED) || digitalRead((sensorPin)==HIGH))
+    {
+    analogWrite(D8,230);
+    analogWrite(D4,126);
+    analogWrite(D3,34); //Orange LED ON
+    ///////////////////////
+    sensorvalue = digitalRead(sensorPin);
+  Serial.print("offline sensor = ");
+  sensor();
+    Serial.print(".}");
+    delay(1000);
+    server.handleClient();
+    delay(1000);
+}
+  analogWrite(D8,0);
+  analogWrite(D4,0);
+  analogWrite(D3,0);  //Orange LED OFF
+}
+}
+//////////////////////////////////////////////////////*****SENSOR******///////////////////////////////////////////////////////
+void sensor() {
+  sensorvalue = digitalRead(sensorPin);
+  
+  Serial.println(sensorvalue);
+  if (sensorvalue==HIGH) 
+  {
+    data=("Motion+Detected"); //Posting data in String form on server
+    delay(20);
+  }
+  if (sensorvalue==HIGH) 
+  {
+    digitalWrite(buzzer,HIGH);
+    delay(5000);
+   
+  }
+  else
+  {
+    digitalWrite(buzzer,LOW);
+  }
+}
+/////////////////////////////******Checking if selected wifi credentials are correct or not******///////////////////////////////
+bool testWifi(void)
+{
+  int c = 0;
+  Serial.println("Waiting for Wifi to connect");
+  while ( c < 20 ) //variable to set how much time we will check if wifi is connected or not
+  {
+    if (WiFi.status() == WL_CONNECTED) //if wifi is connected
+    {
+      /////////green light blink////////////
+      for (int i = 0; i < 2; i++)
+    {
+       digitalWrite(greenLed, HIGH);
+      delay(200);
+      digitalWrite(greenLed, LOW);
+      delay(200);
+    }
+      return true;
+    }
+    delay(500);
+    Serial.print("*");
+    c++;
+  }
+  Serial.println("");
+  Serial.println("Connect timed out, opening AP"); //automatically goes to setup mode if wrong ssid or pass is inserted
+  digitalWrite(redLed,HIGH);
+  delay(100);
+  return false;
+ 
+}
+////////////////////////////////////////////**********Creating Web Page*********/////////////////////////////////////////////
+void launchWeb()
+{
+  Serial.println("");
+  if (WiFi.status() == WL_CONNECTED) //if wifi is connnected
+    Serial.println("WiFi connected");
+  Serial.print("Local IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("SoftAP IP: ");
+  Serial.println(WiFi.softAPIP());
+  createWebServer();
+  ////// Start the server/////////
+  server.begin();
+  Serial.println("Server started");
+}
+
+void setupAP(void)
+{
+  ///////////////////////*********scanning and printing wifi networks available on server*********///////////////////////////
+  WiFi.mode(WIFI_STA); //for station mode functions
+  WiFi.disconnect();
+  delay(100);
+  int n = WiFi.scanNetworks();
+  Serial.println("scan done");
+  if (n == 0)
+    Serial.println("no networks found");
+  else
+  {
+    Serial.print(n);
+    Serial.println(" networks found");
+    for (int i = 0; i < n; ++i)
+    {
+      // Print SSID and RSSI for each network found
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(WiFi.SSID(i));
+      Serial.print(" (");
+      Serial.print(WiFi.RSSI(i));
+      Serial.print(")");
+      Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*");
+      delay(10);
+    }
+  }
+  Serial.println("");
+  st = "<ol>";
+  for (int i = 0; i < n; ++i)
+  {
+    // Print SSID and RSSI for each network found
+    st += "<li>";
+    st += WiFi.SSID(i);
+    st += " (";
+    st += WiFi.RSSI(i);
+
+    st += ")";
+    st += (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "*";
+    st += "</li>";
+  }
+  st += "</ol>";
+  delay(100);
+  WiFi.softAP("Theft detection", "12345678"); //SSID and PASS for hotspot of nodemcu
+  Serial.println("softap");
+  launchWeb();
+  Serial.println("over");
+}
+
+void createWebServer()
+{
+ ////////////////////////////******First web page on 192.168.4.1 showing avaialble networks*****/////////////////////////
+    server.on("/", []() {
+      IPAddress ip = WiFi.softAPIP();
+      String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+      content = "<!DOCTYPE HTML>\r\n<html>Hello from ESP8266 at ";
+      content += "<form action=\"/scan\" method=\"POST\"><input type=\"submit\" value=\"scan\"></form>";
+      content += ipStr;
+      content += "<p>";
+      content += st;
+      content += "</p><form method='get' action='setting'><label>SSID: </label><input name='ssid' length=32><input name='pass' length=64><input type='submit'></form>";
+      content += "</html>";
+      server.send(200, "text/html", content);
+    });
+
+///////////////////////////********Web page for saving API or USER ID for particular Device********///////////////////////////
+    server.on("/API", []() {
+        content = "<!DOCTYPE HTML>\r\n<html>Write API";
+      //content += "<form action=\"/API/saved\" method=\"POST\"><input type=\"HIT\" </form>";
+      content += "</p><form method='get' action='API/saved'> <label>API:</label><input name='API' length=110><input type='submit'></form>";
+      content += "</html>";
+      server.send(200, "text/html", content);
+    });
+    ////////////////////////////////////////*********Saving API in EEPROM*********/////////////////////////////////////////////
+    server.on("/API/saved", []() {
+        String qAPI = server.arg("API");  
+        if (qAPI.length() > 0)   //checking length of API with single character
+        {
+          for (int i = 0; i <20; ++i) {
+           EEPROM.write(i, 0);  //Cleaning old API character wise in EEPROM
+        }
+        Serial.println("clearing API eeprom");
+        
+        Serial.println(qAPI);
+        Serial.println("");
+        Serial.println("writing eeprom API:");        //Writing API in EEPROM
+        for (int i = 0; i < qAPI.length(); ++i) //first incrementing characters and then printing 
+        {
+          EEPROM.write( i, qAPI[i]);
+          Serial.print("Wrote: ");
+          Serial.println(qAPI[i]);
+           API += qAPI[i];
+           Serial.print(API);
+           String eAPI;
+  for(int i =0; i<20; ++i)
+  {
+    eAPI += char(EEPROM.read(i));
+  }
+  API = eAPI;
+  Serial.println();
+  Serial.print("API: ");
+  Serial.println(API);
+        }
+        EEPROM.commit(); //releases RAM copy of EEPROM
+        content = "{\"Success\":\"API saved to eeprom... \"}";
+        statusCode = 200;
+        }
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+      server.send(statusCode, "application/json", content);
+    });
+///////////////////////////////////////////********SCANNING ALL NETWORKS*********/////////////////////////////////////////
+    server.on("/scan", []() {
+      //setupAP();
+      IPAddress ip = WiFi.softAPIP();
+      String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+
+      content = "<!DOCTYPE HTML>\r\n<html>go back";
+      server.send(200, "text/html", content);
+
+    });
+/////////////////////////////////////*********Saving ssid and pass in EEPROM**********//////////////////////////////////////
+    server.on("/setting", []() {
+      Serial.print("apiii=");
+      Serial.print(API);
+      String qsid = server.arg("ssid");
+      String qpass = server.arg("pass");
+      String qAPI = server.arg("API");
+      
+      if (qsid.length() > 0 && qpass.length() > 0 ) {
+        Serial.println("clearing eeprom");
+        for (int i = 20; i < 96; ++i) {  //clearing old SSID and PASS saved in 5 to 95 location of EEPROM
+          EEPROM.write(i, 0);
+        }
+        Serial.println(qsid);
+        Serial.println("");
+        Serial.println(qpass);
+        Serial.println("");
+
+        Serial.println("writing eeprom ssid:");
+        for (int i = 0; i < qsid.length(); ++i)
+        {
+          EEPROM.write(21+i, qsid[i]);   //Writing SSID in EEPROM
+          Serial.print("Wrote: ");
+          Serial.println(qsid[i]);
+        }
+        Serial.println("writing eeprom pass:");
+        for (int i = 0; i < qpass.length(); ++i)
+        {
+          EEPROM.write(52 + i, qpass[i]);  //Writing PASS in EEPROM
+          Serial.print("Wrote: ");
+          Serial.println(qpass[i]);
+        }
+       
+        for (int i = 0; i <=API.length(); ++i)
+        {
+        EEPROM.write(i,API[i]);    //Writing API in EEPROM
+        Serial.print("api= ");
+        Serial.print(API[i]);
+        }
+        EEPROM.commit();
+
+       Serial.println("reset");
+       delay(500);
+        ESP.reset();  //turns off hotspot and read credentials in EEPROM
+      } else {
+        content = "{\"Error\":\"404 not found\"}";
+        statusCode = 404;
+        Serial.println("Sending 404");
+      }
+      server.sendHeader("Access-Control-Allow-Origin", "*");
+      server.send(statusCode, "application/json", content);
+
+    });
+   
+}
+void success()
+{
+  content = "{\"Success\"}";
+        statusCode = 200;
+   server.sendHeader("Access-Control-Allow-Origin", "*");
+      server.send(statusCode, "application/json", content);
+}
+//////////////////////////////////////////////////*********verifying INTERNET**********//////////////////////////////////////////////////////
+
+void done()
+{ 
+  go=0;    //becomes zero after checking Server 2 times
+  if(debug){
+  Serial.print("hasInternet ");
+  Serial.println(hasInternet);
+  }
+  
+   Serial.println("WiFi OK"); // Otherwise we are connected
+
+  Serial.print("Connecting to ");
+  Serial.println(host);     //trying to connect a samll server to check internet
+  
+  WiFiClient client;
+  const int httpPort = 80;
+  
+  if (!client.connect(host, httpPort)) {   //waiting till it connects to host (httpBin)
+    Serial.println("Internet failed!!!");
+    hasInternet=false;
+   int cnt;
+   cnt++;
+   if(cnt<4) testWifi(); //if internet fails 4 times then check wifi
+    return;
+  }
+  hasInternet=true;
+
+  String url = "/get";
+  Serial.print("Requesting URL: ");
+  Serial.println(host+url); 
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");    //if we get this responce then it means internet is working
+  delay(10);                                 //Wait for it to send the message
+  while(client.available()){       //waiting for response
+    String line = client.readStringUntil('\r');
+    Serial.print(line);
+  }
+  Serial.println("closing connection");
+  Serial.println();
+  
+}
+void postData()
+{
+Serial.print("connecting to "); 
+Serial.println(host1); // Use WiFiClient class to create TCP connections 
+WiFiClient client; 
+const int httpPort = 80; 
+ if(client.connect(host1, httpPort)) //if Server works then post data when ever there is detection
+ {
+Serial.print("Requesting URL: "); 
+String postData = String (sensorvalue);  //POST data in String type(motion detected)
+String address = url1+postData; //adding data inside URL with GET method (removing this when it shifts to POST)
+Serial.println(url1+postData); //Post Data 
+HTTPClient http; 
+http.begin(address); 
+http.addHeader("Content-Type", "application/x-www-form-urlencoded"); 
+auto httpCode = http.POST(postData); //for POST method
+Serial.print("httpsCode");
+Serial.println(httpCode); //Print HTTP return code 
+String payload = http.getString(); 
+Serial.print("payload");
+Serial.println(payload); //Print request response payload 
+unsigned long timeout = millis();
+while (client.available() == 0)
+{
+if (millis() - timeout > 5000)
+{ Serial.println(">>> Client Timeout !");
+client.stop(); return; } } // Read all the lines of the reply from server and print them to Serial
+while (client.available()) //waiting for response
+{ String line = client.readStringUntil('\r'); 
+Serial.print(line);
+http.end(); //Close connection 
+Serial.println(); 
+Serial.println("closing connection");
+} }
+ x:
+ if (!client.connect(host1, httpPort)) //waiting for server(host1) to connect
+ {
+    Serial.println("Connection failed!!!"); //if it does not connects to server (host1)
+    
+     
+     if(hasInternet==false) 
+     {
+      digitalWrite(D8,HIGH);
+      
+      come++;
+      if(come<4)  // check internet 4 times
+      {
+       done();
+      }
+      else   //if still no internet then blink red led
+      {
+     //////red light blink/////////////
+    if(millis() - previousTime >= 1000)
+    {
+       previousTime=millis();
+       if(ledState==LOW) 
+       {
+      ledState=HIGH;
+       }
+       else
+       {                   /////////////////////add new colour here****************************************///\\\\\\\\
+        ledState=LOW;
+       }
+       digitalWrite(redLed,ledState);
+       delay(2000);
+    }
+     }
+      Serial.print("come = ");
+      Serial.println(come);
+     } 
+  else
+  {
+    //////////blue light blink////////////
+    digitalWrite(blueLed,HIGH);   //if internet is available but server in not available 
+    come=0; 
+    go++;
+    delay(1000);
+    if(go<2)    //check Server two times then check internet after detection
+    {
+      goto x; 
+    }
+    else
+    {
+    digitalWrite(blueLed,LOW);
+    done();  //check internet
+    }
+      Serial.print("go = ");
+      Serial.println(go);  
+    }
+  }
+  }
