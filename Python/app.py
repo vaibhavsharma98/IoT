@@ -8,7 +8,7 @@ st.set_page_config(layout="wide")
 
 # Load data
 def load_data():
-    file_path = 'Crusher Report.xlsx'  # Adjust this path for deployment
+    file_path = 'Python/Crusher Report.xlsx'  # Adjust this path for deployment
     df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
 
     # Initialize variables
