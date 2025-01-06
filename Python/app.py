@@ -65,7 +65,6 @@ def load_data():
     # Correct the Supply_vs_Output calculation
     cleaned_df['Supply_vs_Output'] = cleaned_df['Aggregate_Output'] - cleaned_df['Supply_Total']
     cleaned_df['RBM_vs_Output'] = cleaned_df['RBM'] - cleaned_df['Aggregate_Output']
-
     return cleaned_df
 
 # Load cleaned data
