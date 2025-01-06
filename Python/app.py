@@ -35,7 +35,7 @@ def load_data():
         if pd.isna(row[1]) or row[1] in ["Site Name", "HMP Status", ""]:
             continue
 
-        if current_date and detail_type and pd.notna(row[1]):
+        if current_date and detail_type == 'Crusher' and pd.notna(row[1]):
             cleaned_data.append({
                 'Date': current_date,
                 'Detail_Type': detail_type,
