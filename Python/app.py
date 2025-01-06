@@ -8,8 +8,8 @@ st.set_page_config(layout="wide")
 
 # Load data
 def load_data():
-    file_path = 'Python/Crusher Report.xlsx'  # Adjust this path for deployment
-    df = pd.read_excel(file_path, sheet_name='Sheet1', header=None)
+    uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
+    df = pd.read_excel(uploaded_file, sheet_name='Sheet1', header=None)
 
     # Initialize variables
     cleaned_data = []
@@ -74,7 +74,7 @@ try:
     if data.empty:
         st.error("No data was extracted. Please check the input file structure and ensure the correct format.")
 except Exception as e:
-    st.error(f"An error occurred while loading the data: {e}")
+    #st.error(f"An error occurred while loading the data: {e}")
     data = pd.DataFrame()
 
 # Streamlit App
