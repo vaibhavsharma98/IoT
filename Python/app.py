@@ -224,7 +224,6 @@ if not data.empty:
 
         
         # Supply vs Output Analysis
-        st.subheader("Supply vs Output Analysis")
         st.header("Aggregate Output vs Supply Total Analysis")
         st.subheader("Filter by Time Period")
         time_period = st.radio("Select Time Period", options=["Daily", "Weekly", "Monthly", "Custom Time Frame"])
