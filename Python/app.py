@@ -6,9 +6,22 @@ from datetime import datetime, timedelta
 # Set Streamlit page config for wide layout
 st.set_page_config(layout="wide")
 
+st.markdown("""
+    <style>
+    .highcharts-container {
+        width: 100% !important;
+        height: auto !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Load data
 def load_data():
     uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
+    if uploaded_file is None:
+        st.warning("Please upload an Excel file to proceed.")
+        st.stop()
+
     df = pd.read_excel(uploaded_file, sheet_name='Sheet1', header=None)
 
     # Initialize variables
@@ -65,6 +78,7 @@ def load_data():
     # Correct the Supply_vs_Output calculation
     cleaned_df['Supply_vs_Output'] = cleaned_df['Aggregate_Output'] - cleaned_df['Supply_Total']
     cleaned_df['RBM_vs_Output'] = cleaned_df['RBM'] - cleaned_df['Aggregate_Output']
+
     return cleaned_df
 
 # Load cleaned data
@@ -80,6 +94,9 @@ except Exception as e:
 st.title("Crusher and Plant Data Analysis")
 
 if not data.empty:
+    csv = data.to_csv(index=False)
+    st.download_button(label="Download Processed Data", data=csv, file_name="processed_data.csv", mime="text/csv")
+
     st.header("Detailed Analysis by Date")
     available_dates = data['Date'].dropna().unique()
     selected_date = st.selectbox("Select a Date", options=available_dates)
@@ -214,47 +231,48 @@ if not data.empty:
 
         # Prepare data for graph
         filtered_data_site = data.copy()
+        # Filter data by the selected time period
         if time_period == "Daily":
-            filtered_data_site = filtered_data_site[filtered_data_site['Date'] >= (datetime.now() - timedelta(days=15))]
+            filtered_data_site = data[data['Date'] >= (datetime.now() - timedelta(days=15))]
         elif time_period == "Weekly":
             filtered_data_site['Week'] = filtered_data_site['Date'].dt.to_period('W').apply(lambda r: r.start_time)
-            filtered_data_site = filtered_data_site.groupby('Week').agg({
+            filtered_data_site = filtered_data_site.groupby(['Week', 'Site_Name']).agg({
                 'Aggregate_Output': 'sum',
                 'Supply_Total': 'sum',
                 'Supply_vs_Output': 'sum',
                 'RBM_vs_Output': 'sum',
-                'RBM': 'sum',   # <--- add this line
-                'Diesel_Consumption': 'sum',  # <--- and others if needed
+                'RBM': 'sum',
+                'Diesel_Consumption': 'sum',
                 'Running Hours': 'sum',
                 'Maintainance Hours': 'sum',
-                'Actual Working Hours': 'sum',
-                'Site_Name': lambda x: ', '.join(x)
+                'Actual Working Hours': 'sum'
             }).reset_index()
         elif time_period == "Monthly":
             filtered_data_site['Month'] = filtered_data_site['Date'].dt.to_period('M').apply(lambda r: r.start_time)
-            filtered_data_site = filtered_data_site.groupby('Month').agg({
+            filtered_data_site = filtered_data_site.groupby(['Month', 'Site_Name']).agg({
                 'Aggregate_Output': 'sum',
                 'Supply_Total': 'sum',
                 'Supply_vs_Output': 'sum',
                 'RBM_vs_Output': 'sum',
-                'RBM': 'sum',   # <--- add this line
-                'Diesel_Consumption': 'sum',  # <--- and others if needed
+                'RBM': 'sum',
+                'Diesel_Consumption': 'sum',
                 'Running Hours': 'sum',
                 'Maintainance Hours': 'sum',
-                'Actual Working Hours': 'sum',
-                'Site_Name': lambda x: ', '.join(x)
+                'Actual Working Hours': 'sum'
             }).reset_index()
         elif time_period == "Custom Time Frame":
-            st.write("Select a custom time frame:")
             custom_start_date = st.date_input("Start Date", value=data['Date'].min().date())
             custom_end_date = st.date_input("End Date", value=data['Date'].max().date())
             custom_start_date = pd.to_datetime(custom_start_date)
             custom_end_date = pd.to_datetime(custom_end_date)
-            filtered_data_site = filtered_data_site[(filtered_data_site['Date'] >= custom_start_date) & (filtered_data_site['Date'] <= custom_end_date)]
+            filtered_data_site = data[(data['Date'] >= custom_start_date) & (data['Date'] <= custom_end_date)]
 
         # Filter for Site Selection
         st.subheader("Select a Site")
         site_options = data['Site_Name'].dropna().unique()
+        if len(site_options) == 0:
+            st.warning("No site data available for the selected filters.")
+            st.stop()
         selected_site = st.selectbox("Choose a Site", options=["All"] + list(site_options))
 
         # Apply site filter
@@ -295,6 +313,7 @@ if not data.empty:
                     if time_period in ["Daily", "Custom Time Frame"] else
                     filtered_data_site.iloc[:, 0].dt.strftime('%Y-%m').tolist()
                 )
+                chart_height = min(500, len(filtered_data_site) * 50 + 300)  # Adjust height dynamically
                 graph_html = f"""
                 <div id="supply-vs-output" style="height: 500px;"></div>
                 <script src="https://code.highcharts.com/highcharts.js"></script>
@@ -334,6 +353,12 @@ if not data.empty:
                     }});
                 }});</script>"""
                 st.components.v1.html(graph_html, height=600)
+                # st.markdown("### Metrics Explanation")
+                # st.info("""
+                # - **Total Aggregate Output**: The sum of all aggregate output values for the selected period.
+                # - **RBM vs Output**: The difference between RBM and aggregate output.
+                # - **L/Cubic Meter**: Diesel consumption per cubic meter of aggregate output.
+                # """)
                 # Display full calculation below the graph
                 st.markdown(f"""
                 ### Detailed Calculation:
@@ -353,6 +378,7 @@ if not data.empty:
                         if time_period in ["Daily", "Custom Time Frame"] else
                         filtered_data_site.iloc[:, 0].dt.strftime('%Y-%m').tolist()
                     )
+                    chart_height = min(500, len(filtered_data_site) * 50 + 300)  # Adjust height dynamically
                     graph_html = f"""
                     <div id="RBM-vs-output" style="height: 500px;"></div>
                     <script src="https://code.highcharts.com/highcharts.js"></script>
