@@ -91,13 +91,43 @@ except Exception as e:
     data = pd.DataFrame()
 
 # Streamlit App
-st.title("Crusher and Plant Data Analysis")
+st.markdown("""
+    <style>
+    .highlight-header {
+        background-color: #f4f4f4; /* Light gray background */
+        color: #333333;          /* Dark gray text */
+        padding: 10px;           /* Add some padding */
+        border-radius: 8px;      /* Rounded corners */
+        text-align: center;      /* Center the text */
+        font-size: 45px;         /* Font size */
+        font-weight: bold;       /* Bold font */
+        margin-bottom: 20px;     /* Add spacing below */
+    }
+    </style>
+    <div class="highlight-header">Crusher and Plant Data Analysis</div>
+""", unsafe_allow_html=True)
+
 
 if not data.empty:
     csv = data.to_csv(index=False)
     st.download_button(label="Download Processed Data", data=csv, file_name="processed_data.csv", mime="text/csv")
 
-    st.header("Detailed Analysis by Date")
+    st.markdown("""
+    <style>
+    .highlight-header2 {
+        background-color: #f4f4f4; /* Light gray background */
+        color: #333333;          /* Dark gray text */
+        padding: 10px;           /* Add some padding */
+        border-radius: 8px;      /* Rounded corners */
+        text-align: left;      /* Center the text */
+        font-size: 30px;         /* Font size */
+        font-weight: bold;       /* Bold font */
+        margin-bottom: 20px;     /* Add spacing below */
+    }
+    </style>
+    <div class="highlight-header2">Detailed Analysis by Date</div>
+""", unsafe_allow_html=True)
+
     available_dates = data['Date'].dropna().unique()
     selected_date = st.selectbox("Select a Date", options=available_dates)
 
@@ -224,7 +254,21 @@ if not data.empty:
 
         
         # Supply vs Output Analysis
-        st.header("Aggregate Output vs Supply Total Analysis")
+        st.markdown("""
+        <style>
+        .highlight-header3 {
+            background-color: #f4f4f4; /* Light gray background */
+            color: #333333;          /* Dark gray text */
+            padding: 10px;           /* Add some padding */
+            border-radius: 8px;      /* Rounded corners */
+            text-align: left;      /* Center the text */
+            font-size: 30px;         /* Font size */
+            font-weight: bold;       /* Bold font */
+            margin-bottom: 20px;     /* Add spacing below */
+        }
+        </style>
+        <div class="highlight-header3">Aggregate Output vs Supply Total Analysis</div>
+    """, unsafe_allow_html=True)
         st.subheader("Filter by Time Period")
         time_period = st.radio("Select Time Period", options=["Daily", "Weekly", "Monthly", "Custom Time Frame"])
 
